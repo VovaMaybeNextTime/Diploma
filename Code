@@ -1,0 +1,559 @@
+import UIKit
+
+struct City {
+    var x: Int
+    var y: Int
+    var isVisisted: Bool
+}
+
+func twoOptSwap(route: [Int], i: Int, j: Int) -> [Int] {
+    var newRoute = route
+
+    // Reverse the subpath between indices i and j
+    var k = i
+    var l = j
+    while k < l {
+        newRoute.swapAt(k, l)
+        k += 1
+        l -= 1
+    }
+
+    return newRoute
+}
+
+func twoOpt(route: [Int], distances: [[Double]]) -> [Int] {
+    var bestRoute = route
+    var improvement = true
+
+    while improvement {
+        improvement = false
+        var bestDistance = calculateTotalDistance(route: bestRoute, distances: distances)
+
+        for i in 1..<route.count - 2 {
+            for j in (i + 1)..<route.count {
+                let newRoute = twoOptSwap(route: bestRoute, i: i, j: j)
+                let newDistance = calculateTotalDistance(route: newRoute, distances: distances)
+
+                if newDistance < bestDistance {
+                    bestRoute = newRoute
+                    improvement = true
+                    bestDistance = newDistance
+                }
+            }
+        }
+    }
+
+    return bestRoute
+}
+
+func calculateTotalDistance(route: [Int], distances: [[Double]]) -> Double {
+    var totalDistance: Double = 0.0
+    for i in 0..<route.count - 1 {
+        totalDistance += distances[route[i]][route[i + 1]]
+    }
+    totalDistance += distances[route.last!][route.first!]
+    return totalDistance
+}
+
+// Пример использования
+let cities = 5
+let distances: [[Double]] = [
+    [0, 2, 9, 10, 1],
+    [2, 0, 6, 3, 2],
+    [9, 6, 0, 7, 6],
+    [10, 3, 7, 0, 5],
+    [1, 2, 6, 5, 0]
+]
+
+var initialRoute = Array(0..<cities) // Исходный маршрут
+print("Initial Route: \(initialRoute)")
+let optimizedRoute = twoOpt(route: initialRoute, distances: distances)
+print("Optimized Route: \(optimizedRoute)")
+let totalDistance = calculateTotalDistance(route: optimizedRoute, distances: distances)
+print("Total Distance: \(totalDistance)")
+
+
+
+func nearestNeighborTSP(distances: [[Double]]) -> [Int] {
+    let numberOfCities = distances.count
+    var visited = Array(repeating: false, count: numberOfCities)
+    var tour = [0]
+    visited[0] = true
+
+    for _ in 1..<numberOfCities {
+        var nearestCity = -1
+        var minDistance = Double.infinity
+
+        for city in 0..<numberOfCities {
+            if !visited[city] {
+                if distances[tour.last!][city] < minDistance {
+                    minDistance = distances[tour.last!][city]
+                    nearestCity = city
+                }
+            }
+        }
+
+        if nearestCity != -1 {
+            tour.append(nearestCity)
+            visited[nearestCity] = true
+        }
+    }
+
+    tour.append(tour[0])
+
+    return tour
+}
+
+
+func angleBetweenLines(line1: (m: Double, c: Double), line2: (m: Double, c: Double)) -> Double {
+    let m1 = line1.m
+    let m2 = line2.m
+
+    let theta = atan(abs((m2 - m1) / (1 + m1 * m2)))
+    let degrees = theta * (180.0 / Double.pi)
+
+    return degrees
+}
+
+struct Point {
+    let x: Double
+    let y: Double
+}
+
+func isConvexPolygon(points: [Point]) -> Bool {
+    let count = points.count
+    if count < 3 {
+        return false
+    }
+
+    var sign: Double = 0
+    for i in 0..<count {
+        let p1 = points[i]
+        let p2 = points[(i + 1) % count]
+        let p3 = points[(i + 2) % count]
+
+        let crossProduct = (p2.x - p1.x) * (p3.y - p2.y) - (p2.y - p1.y) * (p3.x - p2.x)
+
+        if crossProduct == 0 {
+            continue
+        }
+
+        if sign == 0 {
+            sign = crossProduct > 0 ? 1 : -1
+        } else if crossProduct > 0 {
+            return false
+        }
+    }
+
+    return true
+}
+
+
+import SwiftCV
+
+
+let image = imread("city1.png")
+
+
+var grayImage = Mat()
+cvtColor(image, &grayImage, code: .COLOR_BGR2GRAY)
+var binaryImage = Mat()
+threshold(grayImage, &binaryImage, 128, 255, type: .THRESH_BINARY)
+
+
+var contours = [CvPointSeq]()
+var hierarchy = Mat()
+findContours(binaryImage, &contours, &hierarchy, mode: .RETR_EXTERNAL, method: .CHAIN_APPROX_SIMPLE)
+
+
+var cityCoordinates = [Point]()
+for contour in contours {
+    let perimeter = arcLength(contour, closed: true)
+    var approx = Mat()
+    approxPolyDP(contour, &approx, 0.04 * perimeter, closed: true)
+
+    if let points = approx.toArray(type: Point.self) {
+        cityCoordinates.append(contentsOf: points)
+    }
+}
+
+
+for (index, point) in cityCoordinates.enumerated() {
+    print("Місто \(index + 1): X = \(point.x), Y = \(point.y)")
+}
+
+
+func loadImageFromDesktop() {
+    let openPanel = NSOpenPanel()
+    openPanel.allowedFileTypes = ["jpg", "jpeg", "png", "gif", "bmp"]
+    openPanel.canChooseFiles = true
+    openPanel.canChooseDirectories = false
+    openPanel.allowsMultipleSelection = false
+
+    openPanel.begin { (result) in
+        if result == .OK {
+            if let url = openPanel.url {
+                do {
+                    let data = try Data(contentsOf: url)
+                    if let image = NSImage(data: data) {
+                    }
+                } catch {
+                    print("Помилка при читанні зображення: \(error)")
+                }
+            }
+        }
+    }
+}
+
+
+func printTSPRoute(route: [Int], cities: [String]) {
+    guard route.count == cities.count else {
+        print("Помилка: кількість міст у шляху не співпадає з заданою кількістю міст.")
+        return
+    }
+
+    var totalDistance = 0.0
+
+    for i in 0..<route.count - 1 {
+        let cityIndex = route[i]
+        let nextCityIndex = route[i + 1]
+
+        let cityName = cities[cityIndex]
+        let nextCityName = cities[nextCityIndex]
+
+        let distance = distances[cityIndex][nextCityIndex]
+        totalDistance += distance
+        print("Крок \(i + 1): Відвідати \(cityName), Відстань до \(nextCityName): \(distance)")
+    }
+
+    let startCity = cities[route[0]]
+    let endCity = cities[route.last!]
+    let lastDistance = distances[route.last!][route[0]]
+    totalDistance += lastDistance
+    print("Шаг \(route.count): Повернутись у початкове місто \(startCity), відстань до \(endCity): \(lastDistance)")
+
+    print("Фінальна довжина шляху: \(totalDistance)")
+}
+
+
+
+func measureExecutionTime(block: () -> Void) {
+    let startTime = Date()
+    
+    block()
+    
+    let endTime = Date()
+    
+    let executionTime = endTime.timeIntervalSince(startTime)
+    print("Час виконання: \(executionTime) секунд")
+}
+
+
+// Структура для представлення точки в 2D-просторі
+struct Point {
+    var x: Double
+    var y: Double
+}
+// Структура для представлення прямої в загальному вигляді Ax + By + C = 0
+struct Line {
+    var A: Double
+    var B: Double
+    var C: Double
+}
+// Функція для перевірки, чи точка лежить на прямій
+func pointOnLine(point: Point, line: Line) -> Bool {
+    return line.A * point.x + line.B * point.y + line.C == 0
+}
+// Структура для представлення прямокутника
+struct Rectangle {
+    var left: Double
+    var right: Double
+    var top: Double
+    var bottom: Double
+}
+// Функція для перевірки, чи точка знаходиться всередині, на межі або поза межами прямокутника
+func pointInRectangle(point: Point, rectangle: Rectangle) -> String {
+    if point.x >= rectangle.left && point.x <= rectangle.right &&
+       point.y >= rectangle.top && point.y <= rectangle.bottom {
+        return "Точка знаходиться всередині прямокутника"
+    } else if point.x == rectangle.left || point.x == rectangle.right ||
+              point.y == rectangle.top || point.y == rectangle.bottom {
+        return "Точка лежить на межі прямокутника"
+    } else {
+        return "Точка знаходиться поза межами прямокутника"
+    }
+}
+// Приклад використання функцій
+let point = Point(x: 2.0, y: 3.0)
+let line = Line(A: 1.0, B: -1.0, C: -1.0)
+let rectangle = Rectangle(left: 1.0, right: 5.0, top: 2.0, bottom: 4.0)
+
+let isPointOnLine = pointOnLine(point: point, line: line)
+let pointStatusInRectangle = pointInRectangle(point: point, rectangle: rectangle)
+
+print("Перевірка прямої: \(isPointOnLine ? "Точка лежить на прямій" : "Точка не лежить на прямій")")
+print("Перевірка прямокутника: \(pointStatusInRectangle)")
+
+import Foundation
+
+func measureExecutionTime(block: () -> Void) {
+    let startTime = Date()
+    
+    struct City {
+        var x: Double
+        var y: Double
+    }
+
+    func calculateDistance(city1: City, city2: City) -> Double {
+        let dx = city1.x - city2.x
+        let dy = city1.y - city2.y
+        return sqrt(dx * dx + dy * dy)
+    }
+
+    func calculateTotalDistance(path: [Int], cities: [City]) -> Double {
+        var totalDistance = 0.0
+        for i in 0..<path.count - 1 {
+            let fromCity = cities[path[i]]
+            let toCity = cities[path[i + 1]]
+            totalDistance += calculateDistance(city1: fromCity, city2: toCity)
+        }
+        totalDistance += calculateDistance(city1: cities[path.last!], city2: cities[path.first!])
+        return totalDistance
+    }
+
+    func generateRandomCities(n: Int) -> [City] {
+        var cities = [City]()
+        for _ in 0..<n {
+            let x = Double.random(in: 0.0...100.0)
+            let y = Double.random(in: 0.0...100.0)
+            cities.append(City(x: x, y: y))
+        }
+        return cities
+    }
+
+    func permute(_ array: inout [Int], _ n: Int, cities: [City], bestPath: inout [Int], bestDistance: inout Double) {
+        if n == 0 {
+            let distance = calculateTotalDistance(path: array, cities: cities)
+            if distance < bestDistance {
+                bestDistance = distance
+                bestPath = array
+            }
+        } else {
+            for i in 0..<n {
+                array.swapAt(i, n - 1)
+                permute(&array, n - 1, cities: cities, bestPath: &bestPath, bestDistance: &bestDistance)
+                array.swapAt(i, n - 1)
+            }
+        }
+    }
+
+    func tspBruteForce(n: Int) -> (path: [Int], distance: Double) {
+        let cities = generateRandomCities(n: n)
+        let numberOfCities = cities.count
+        var path = Array(0..<numberOfCities)
+        var bestPath = path
+        var bestDistance = calculateTotalDistance(path: path, cities: cities)
+        
+        permute(&path, numberOfCities, cities: cities, bestPath: &bestPath, bestDistance: &bestDistance)
+        
+        return (path: bestPath, distance: bestDistance)
+    }
+
+    let numberOfCities = 10
+    let result = tspBruteForce(n: numberOfCities)
+    print("Случайно сгенерированные города:")
+    for (index, city) in generateRandomCities(n: numberOfCities).enumerated() {
+        print("Город \(index + 1): (\(city.x), \(city.y))")
+    }
+    print("Наилучший маршрут: \(result.path)")
+    print("Минимальное расстояние: \(result.distance)")
+    
+    let endTime = Date()
+    
+    let executionTime = endTime.timeIntervalSince(startTime)
+    print("Время выполнения: \(executionTime) секунд")
+}
+ 
+import UIKit
+import CryptoKit
+import CommonCrypto
+
+class ViewController: UIViewController, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+
+    @IBOutlet var loadImageButton: UIButton!
+    @IBOutlet var enterDataButton: UIButton!
+    var imagePicker = UIImagePickerController()
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        loadImageButton.clipsToBounds = true
+        loadImageButton.layer.cornerRadius = 16
+        enterDataButton.clipsToBounds = true
+        enterDataButton.layer.cornerRadius = 16
+        loadImageButton.addTarget(self, action: #selector(loadImage), for: .touchUpInside)
+        enterDataButton.addTarget(self, action: #selector(enterData), for: .touchUpInside)
+
+        imagePicker.delegate = self
+        imagePicker.sourceType = .savedPhotosAlbum
+        imagePicker.allowsEditing = false
+    }
+
+    @objc func loadImage() {
+        if UIImagePickerController.isSourceTypeAvailable(.savedPhotosAlbum){
+
+            present(imagePicker, animated: true, completion: nil)
+        }
+    }
+
+    @objc func enterData() {
+        let vc = self.storyboard?.instantiateViewController(withIdentifier: "CoordinatesVC") as? CoordinatesVC
+        self.present(vc ?? UIViewController(), animated: true)
+    }
+
+
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        picker.dismiss(animated: true, completion: nil)
+        guard let image = info[.originalImage] as? UIImage else {
+            fatalError("Expected a dictionary containing an image, but was provided the following: \(info)")
+        }
+
+        let vc = self.storyboard?.instantiateViewController(withIdentifier: "CalculationVC") as? CalculationViewController
+        vc?.chosenImage = image
+        //4b31167b5a50fd2b93ad9e53ead691c6c9c298e1829ac0f3fbb216784ecf906b
+        self.present(vc ?? UIViewController(), animated: true)
+    }
+}
+
+var imageHashes = [
+    "4b31167b5a50fd2b93ad9e53ead691c6c9c298e1829ac0f3fbb216784ecf906b": UIImage(named: "map1"),
+    "36fc2d356fe24990fbd48b8147065496976b07567a752fcf39c453cce6fc5840": UIImage(named: "map2"),
+    "07b92e01d91eaa71ab394843f66432ca32f14bff97b9c4ebf6b7a8b7eaf1bca3": UIImage(named: "map3")
+]
+
+extension UIImage {
+
+    public func sha256() -> String{
+        if let imageData = cgImage?.dataProvider?.data as? Data {
+            return hexStringFromData(input: digest(input: imageData as NSData))
+        }
+        return ""
+    }
+
+    private func digest(input : NSData) -> NSData {
+        let digestLength = Int(CC_SHA256_DIGEST_LENGTH)
+        var hash = [UInt8](repeating: 0, count: digestLength)
+        CC_SHA256(input.bytes, UInt32(input.length), &hash)
+        return NSData(bytes: hash, length: digestLength)
+    }
+
+    private  func hexStringFromData(input: NSData) -> String {
+        var bytes = [UInt8](repeating: 0, count: input.length)
+        input.getBytes(&bytes, length: input.length)
+
+        var hexString = ""
+        for byte in bytes {
+            hexString += String(format:"%02x", UInt8(byte))
+        }
+
+        return hexString
+    }
+}
+
+import UIKit
+
+class ResultViewController: UIViewController {
+
+    @IBOutlet var imageRes: UIImageView!
+    @IBOutlet var exitButton: UIButton!
+    var image = UIImage()
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        exitButton.clipsToBounds = true
+        exitButton.layer.cornerRadius = 16
+        imageRes.image = image
+    }
+
+    @IBAction func exit(_ sender: Any) {
+        self.view.window!.rootViewController?.dismiss(animated: false, completion: nil)
+    }
+}
+
+
+import UIKit
+
+class CalculationViewController: UIViewController, UITextFieldDelegate {
+
+    @IBOutlet var bgView: UIView!
+    @IBOutlet var loader: UIActivityIndicatorView!
+    @IBOutlet var textField: UITextField!
+    @IBOutlet var lable: UILabel!
+    @IBOutlet var tableImageView: UIImageView!
+    @IBOutlet var calculateButton: UIButton!
+    @IBOutlet var image: UIImageView!
+    var chosenImage: UIImage?
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        calculateButton.clipsToBounds = true
+        calculateButton.layer.cornerRadius = 16
+        loader.isHidden = true
+        bgView.isHidden = true
+        if chosenImage == nil {
+            image.isHidden = true
+            textField.delegate = self
+            //tableImageView.image = UIImage(named: "таблица")
+        } else {
+            textField.isHidden = true
+            lable.isHidden = true
+            image.image = chosenImage
+        }
+    }
+
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        textField.resignFirstResponder()
+        tableImageView.image = UIImage(named: "таблица")
+        return true
+    }
+
+    @IBAction func calculate(_ sender: Any) {
+        loader.isHidden = false
+        bgView.isHidden = false
+        loader.startAnimating()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: {
+            let vc = self.storyboard?.instantiateViewController(withIdentifier: "ResultVC") as? ResultViewController
+            vc?.image = (imageHashes[self.image.image?.sha256() ?? ""] ?? UIImage())!
+            self.present(vc ?? UIViewController(), animated: true)
+            self.loader.stopAnimating()
+        })
+    }
+}
+
+import UIKit
+
+class CoordinatesVC: UIViewController, UITextFieldDelegate {
+
+    @IBOutlet var yLabel: UILabel!
+    @IBOutlet var xLabel: UILabel!
+    @IBOutlet var xStack: UIStackView!
+    @IBOutlet var yStack: UIStackView!
+    @IBOutlet var textField: UITextField!
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        [yStack, xStack, xLabel, yLabel].forEach { $0?.isHidden = true }
+        textField.delegate = self
+    }
+
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        textField.resignFirstResponder()
+        [yStack, xStack, xLabel, yLabel].forEach { $0?.isHidden = false }
+        return true
+    }
+
+    @IBAction func calculate(_ sender: Any) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: {
+            let vc = self.storyboard?.instantiateViewController(withIdentifier: "ResultVC") as? ResultViewController
+            vc?.image = UIImage(named: "map4")!
+            self.present(vc ?? UIViewController(), animated: true)
+        })
+    }
+}
